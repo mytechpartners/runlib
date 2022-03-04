@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
 
-	"github.com/contester/runlib/win32"
 	"github.com/juju/errors"
+	"github.com/mytechpartners/runlib/win32"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -132,6 +133,16 @@ func (d *PlatformData) terminateAndClose() (err error) {
 	return
 }
 
+var quoteSplitRegexp = regexp.MustCompile("'.+'|\".+\"|\\S+")
+
+func getImageName(sub *Subprocess) string {
+	if sub.Cmd.ApplicationName != "" {
+		return sub.Cmd.ApplicationName
+	}
+	m := quoteSplitRegexp.FindAllString(sub.Cmd.CommandLine, -1)
+	return m[0]
+}
+
 func (sub *Subprocess) CreateFrozen() (*SubprocessData, error) {
 	var d SubprocessData
 
@@ -164,60 +175,59 @@ func (sub *Subprocess) CreateFrozen() (*SubprocessData, error) {
 
 	var pi syscall.ProcessInformation
 
+	applicationName := win32.StringNEToUTF16Ptr(sub.Cmd.ApplicationName)
+	commandLine := win32.StringNEToUTF16Ptr(sub.Cmd.CommandLine)
+	var environment *uint16
+	if sub.NoInheritEnvironment {
+		environment = win32.ListToEnvironmentBlock(sub.Environment)
+	}
+	currentDirectory := win32.StringNEToUTF16Ptr(sub.CurrentDirectory)
+
 	syscall.ForkLock.Lock()
 	wSetInherit(&si)
 
 	if sub.Login != nil {
 		if useCreateProcessWithLogonW {
 			e = win32.CreateProcessWithLogonW(
-				sub.Login.Username,
-				".",
-				sub.Login.Password,
+				syscall.StringToUTF16Ptr(sub.Login.Username),
+				syscall.StringToUTF16Ptr("."),
+				syscall.StringToUTF16Ptr(sub.Login.Password),
 				win32.LOGON_WITH_PROFILE,
-				sub.Cmd.ApplicationName,
-				sub.Cmd.CommandLine,
+				applicationName,
+				commandLine,
 				win32.CREATE_SUSPENDED|syscall.CREATE_UNICODE_ENVIRONMENT,
-				win32.ProcessEnvironmentOptions{
-					NoInherit: sub.NoInheritEnvironment,
-					Env:       sub.Environment,
-				},
-				sub.CurrentDirectory,
+				environment,
+				currentDirectory,
 				&si,
 				&pi)
 		} else {
 			e = win32.CreateProcessAsUser(
 				sub.Login.HUser,
-				sub.Cmd.ApplicationName,
-				sub.Cmd.CommandLine,
+				applicationName,
+				commandLine,
 				nil,
 				nil,
 				true,
 				win32.CREATE_NEW_PROCESS_GROUP|win32.CREATE_NEW_CONSOLE|win32.CREATE_SUSPENDED|
 					syscall.CREATE_UNICODE_ENVIRONMENT|win32.CREATE_BREAKAWAY_FROM_JOB,
-				win32.ProcessEnvironmentOptions{
-					NoInherit: sub.NoInheritEnvironment,
-					Env:       sub.Environment,
-				},
-				sub.CurrentDirectory,
+				environment,
+				currentDirectory,
 				&si,
 				&pi)
 		}
 	} else {
-		e = win32.CreateProcess(
-			sub.Cmd.ApplicationName,
-			sub.Cmd.CommandLine,
+		e = os.NewSyscallError("CreateProcess", syscall.CreateProcess(
+			applicationName,
+			commandLine,
 			nil,
 			nil,
 			true,
 			win32.CREATE_NEW_PROCESS_GROUP|win32.CREATE_NEW_CONSOLE|win32.CREATE_SUSPENDED|
 				syscall.CREATE_UNICODE_ENVIRONMENT|win32.CREATE_BREAKAWAY_FROM_JOB,
-			win32.ProcessEnvironmentOptions{
-				NoInherit: sub.NoInheritEnvironment,
-				Env:       sub.Environment,
-			},
-			sub.CurrentDirectory,
+			environment,
+			currentDirectory,
 			&si,
-			&pi)
+			&pi))
 	}
 
 	closeDescriptors(d.closeAfterStart)

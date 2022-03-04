@@ -7,7 +7,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/contester/runlib/win32"
+	"github.com/mytechpartners/runlib/win32"
 	"golang.org/x/sys/windows"
 
 	log "github.com/sirupsen/logrus"

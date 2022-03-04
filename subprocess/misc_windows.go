@@ -6,8 +6,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/contester/runlib/win32"
 	"github.com/juju/errors"
+	"github.com/mytechpartners/runlib/win32"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -63,9 +63,9 @@ func (s *LoginInfo) Prepare() error {
 
 	var err error
 	s.HUser, err = win32.LogonUser(
-		s.Username,
-		".",
-		s.Password,
+		syscall.StringToUTF16Ptr(s.Username),
+		syscall.StringToUTF16Ptr("."),
+		syscall.StringToUTF16Ptr(s.Password),
 		win32.LOGON32_LOGON_INTERACTIVE,
 		win32.LOGON32_PROVIDER_DEFAULT)
 

@@ -1,10 +1,6 @@
 package subprocess
 
-import (
-	"regexp"
-
-	"github.com/contester/runlib/win32"
-)
+import "github.com/mytechpartners/runlib/win32"
 
 type archDependentPlatformData struct {
 	use32BitLoadLibrary bool
@@ -32,14 +28,4 @@ func (s *SubprocessData) getLoadLibraryW(env PlatformEnvironment) (uintptr, erro
 		return env.GetLoadLibraryW32()
 	}
 	return env.GetLoadLibraryW()
-}
-
-var quoteSplitRegexp = regexp.MustCompile("'.+'|\".+\"|\\S+")
-
-func getImageName(sub *Subprocess) string {
-	if sub.Cmd.ApplicationName != "" {
-		return sub.Cmd.ApplicationName
-	}
-	m := quoteSplitRegexp.FindAllString(sub.Cmd.CommandLine, -1)
-	return m[0]
 }
